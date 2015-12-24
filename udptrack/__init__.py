@@ -1,4 +1,4 @@
-#author: plasmashadow
+# author: plasmashadow
 
 import six
 from random import choice, sample
@@ -38,8 +38,14 @@ def generation_randomid(size, integer=False):
         return int(res)
 
 
-class UDPTracker(object):
+def _parseurl(url):
+    """parses the udp trackert url"""
+    parsed = urlparse(url)
+    return parsed.hostname, parsed.port
 
+
+
+class UDPTracker(object):
     """
       A Tracker for working with udp based
       tracking protocol
@@ -53,7 +59,7 @@ class UDPTracker(object):
 
         self._connection_id = DEFAULT_CONNECTION_ID
         self._trans_id = generation_randomid(5, integer=True)
-        parsed = loads(metadata)
+        parsed = metadata#loads(metadata)
         self._tracker_url = parsed.get("announce", None)
         if not self._tracker_url:
             raise TrackerException("No announce URL present", parsed)
@@ -63,6 +69,8 @@ class UDPTracker(object):
         self._misc = kwargs
         self._downloaded = 0
         self._uploaded = 0
+        self.leechers = self.seeders = []
+        self.timeout = 0
 
     @property
     def info_hash(self):
@@ -73,7 +81,7 @@ class UDPTracker(object):
     @property
     def url(self):
         url_d = urlparse(self._tracker_url)
-        return url_d.host, url_d.port
+        return url_d.hostname, url_d.port
 
     @property
     def left(self):
@@ -115,7 +123,7 @@ class UDPTracker(object):
     def _parse(self, response):
         """parse the response based on action"""
         data, address = response
-        response = defaultdict(lambda x: None)
+        response = defaultdict(lambda: None)
         act = struct.unpack(">i", data[:4])
         act = act[0]
 
@@ -130,8 +138,8 @@ class UDPTracker(object):
             return act, response
 
         elif act == 1 and len(data) >= 20:
-            transaction_id, interval, leechers, seeders =\
-            struct.unpack("!LLLL", data[4:20])
+            transaction_id, interval, leechers, seeders = \
+                struct.unpack("!LLLL", data[4:20])
             if transaction_id != self._trans_id:
                 raise TrackerException(message="invalid transaction id", data=transaction_id)
             response['action'] = act
@@ -188,4 +196,15 @@ class UDPTracker(object):
     def announce(self):
         """sending an announce request to the trackers"""
         act, response = self._sendto(self.url, self._get_announce())
-        pass
+        self.leechers = response['leachers']
+        self.seeders = response['seeders']
+        self.timeout = response['interval']
+        self._connection_id = response.get("connection_id", DEFAULT_CONNECTION_ID)
+        self._trans_id = response.get("transaction_id", self._trans_id)
+
+    def scrap(self, hashes):
+        """sending an scrape request"""
+        act, response = self._sendto(self.url, self._get_scrape(hashes))
+        self._connection_id = response.get("connection_id", DEFAULT_CONNECTION_ID)
+        self._trans_id = response.get("transaction_id", self._trans_id)
+

@@ -7,8 +7,8 @@ def Readme():
 
 
 setup(
-    name='udptack',
-    packages=['udptack'],
+    name='udptrack',
+    packages=['udptrack'],
     version='0.0.5',
     description='',
     long_description=Readme(),
@@ -20,7 +20,7 @@ setup(
         'Programming Language :: Python :: 2',
         'Intended Audience :: Developers'
     ],
-    install_requires=['six', 'python-bencode'],
+    install_requires=['six', 'python-bencode', 'mock'],
     include_package_data=True,
     license='BSD License',
 )
