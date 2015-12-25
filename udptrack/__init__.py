@@ -124,12 +124,13 @@ class UDPTracker(object):
         if not kwargs:
             raise TrackerRequestException("Argument Missing for ", self.announce.__name__)
 
-        arguments = dict.fromkeys(self.__fields)
-        arguments['info_hash'] = trim_hash(self.info_hash)
+        arguments = dict.fromkeys(self.__fields, 0)
+        arguments['info_hash'] = kwargs.get('info_hash', self.info_hash)
+        arguments['peer_id'] = self.peer_id
         arguments['port'] = 6800
         arguments['numwant'] = 10
         arguments.update(kwargs)
-
+        arguments['info_hash'] = trim_hash(arguments['info_hash'])
         values = [arguments[a] for a in self.__fields]
         payload = struct.pack('!20s20sQQQLLLLH', *values)
         return self.send(ANNOUNCE, payload=payload)
