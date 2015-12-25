@@ -2,13 +2,11 @@ import unittest
 
 
 from udptrack import UDPTracker
-from udptrack import DEFAULT_CONNECTION_ID
-from udptrack.exeception import *
 import udptrack
 import logging
 import mock
 
-import StringIO
+
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
