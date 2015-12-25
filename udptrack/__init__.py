@@ -121,7 +121,7 @@ class UDPTracker(object):
 
     def announce(self, **kwargs):
 
-        if not kwargs:
+        if not kwargs and not self.info_hash:
             raise TrackerRequestException("Argument Missing for ", self.announce.__name__)
 
         arguments = dict.fromkeys(self.__fields, 0)
