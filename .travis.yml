@@ -5,7 +5,8 @@ python:
 - '3.2'
 install:
 - pip install six
-- pip install python-bencode
+- pip install BitTorrent-bencode
+- pip install mock
 
 
 script: nosetests

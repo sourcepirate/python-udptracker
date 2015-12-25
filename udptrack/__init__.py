@@ -47,13 +47,15 @@ def _generate_peer_id():
     remaining = 20 - len(peer_id)
     numbers = [str(randint(0, 9)) for _ in xrange(remaining)]
     peer_id += ''.join(numbers)
-    assert(len(peer_id) == 20)
+    assert (len(peer_id) == 20)
     return peer_id
+
 
 def _parseurl(url):
     """parses the udp trackert url"""
     parsed = urlparse(url)
     return parsed.hostname, parsed.port
+
 
 def trim_hash(info_hash):
     """cleans up info hash"""
@@ -63,8 +65,8 @@ def trim_hash(info_hash):
         raise TrackerRequestException("Infohash not equal to 20 digits", info_hash)
     return info_hash
 
-class UDPTracker(object):
 
+class UDPTracker(object):
     """
       A Tracker for working with udp based
       tracking protocol
@@ -98,7 +100,7 @@ class UDPTracker(object):
         self.info_hash = kwargs.get('info_hash')
 
     def build_header(self, action):
-        transaction_id = randint(0, 1 << 32 -1)
+        transaction_id = randint(0, 1 << 32 - 1)
         return transaction_id, struct.pack('!QLL', self._connection_id, action, transaction_id)
 
     def send(self, action, payload=None):
@@ -142,13 +144,13 @@ class UDPTracker(object):
             hash = trim_hash(hash)
             payload += hash
 
-        trans = self.send(SCRAP, payload)
+        trans = self.send(SCRAP, payload=payload)
         trans['sent_hashes'] = hashes
         return trans
 
     def interpret(self):
 
-        self.sock.settimeout(timeout=self.timeout)
+        self.sock.settimeout(self.timeout)
 
         try:
             response = self.sock.recv(10240)
@@ -241,4 +243,3 @@ class UDPTracker(object):
             }
 
         return response
-

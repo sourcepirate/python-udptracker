@@ -2,8 +2,11 @@ import unittest
 
 from bencode import bdecode
 from udptrack import UDPTracker
+from udptrack import DEFAULT_CONNECTION_ID
+from udptrack.exeception import *
 import udptrack
 import logging
+import mock
 
 import StringIO
 
@@ -35,6 +38,39 @@ class TestUDPTracker(unittest.TestCase):
         self.announc_url = self.content.get('announce')
         log.info(self.content)
 
-    def test_connect(self):
-        """test whether it is connecting or not"""
+    @mock.patch.object(UDPTracker, 'send')
+    def test_connect(self, mock_send):
+        """test whether the connect function is behaving
+           properly.
+        """
         tracker = UDPTracker(self.announc_url, timeout=5)
+        tracker.connect()
+        mock_send.assert_called_with(udptrack.CONNECT)
+
+    @mock.patch('udptrack.trim_hash')
+    @mock.patch.object(UDPTracker, 'send')
+    @mock.patch.object(udptrack.struct, 'pack')
+    def test_announce(self, mock_pack, mock_send, mock_trim):
+        """test whether the announce function is working
+        properly
+        """
+        tracker = UDPTracker(self.announc_url, timeout=5)
+        tracker.announce(info_hash=None)
+        mock_trim.assert_called_with(None)
+        args, kwargs = mock_send.call_args
+        self.assertEqual(args, (udptrack.ANNOUNCE,))
+        self.assertTrue(mock_pack.called)
+
+    @mock.patch('udptrack.trim_hash')
+    @mock.patch.object(UDPTracker, 'send')
+    @mock.patch.object(udptrack.struct, 'pack')
+    def test_scrap(self, mock_pack, mock_send, mock_trim):
+        """test whether the announce function is working
+        properly
+        """
+        tracker = UDPTracker(self.announc_url, timeout=5)
+        tracker.scrape(["hash"])
+        mock_trim.assert_called_with('hash')
+        args, kwargs = mock_send.call_args
+        self.assertEqual(args, (udptrack.SCRAP,))
+        self.assertRaises(TrackerRequestException)

@@ -14,13 +14,13 @@ setup(
     long_description=Readme(),
     author='plasmashadow',
     author_email='plasmashadowx@gmail.com',
-    url='https://github.com/plasmashadow/pytorrent.git',
+    url='https://github.com/plasmashadow/python-udptrack.git',
     classifiers=[
         'Programming Language :: Python',
         'Programming Language :: Python :: 2',
         'Intended Audience :: Developers'
     ],
-    install_requires=['six', 'mock'],
+    install_requires=['six', 'mock', 'BitTorrent-bencode'],
     include_package_data=True,
     license='BSD License',
 )
