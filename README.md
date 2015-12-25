@@ -3,6 +3,8 @@
 A Bittorrent udp-tracking protocol Based on the specifications given by
 http://www.rasterbar.com/products/libtorrent/udp_tracker_protocol.html
 
+[![Build Status](https://travis-ci.org/plasmashadow/python-udptracker.svg)](https://travis-ci.org/plasmashadow/python-udptracker)
+
 ##Installation
 
 ```
