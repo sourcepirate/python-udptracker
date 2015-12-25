@@ -45,7 +45,7 @@ def _generate_peer_id():
     """http://www.bittorrent.org/beps/bep_0020.html"""
     peer_id = '-PU' + __VESION__.replace('.', '-') + '-'
     remaining = 20 - len(peer_id)
-    numbers = [str(randint(0, 9)) for _ in xrange(remaining)]
+    numbers = [str(randint(0, 9)) for _ in range(remaining)]
     peer_id += ''.join(numbers)
     assert (len(peer_id) == 20)
     return peer_id
@@ -212,7 +212,7 @@ class UDPTracker(object):
         peer_count = len(peer_data) / peer_size
         peers = []
 
-        for peer_offset in xrange(peer_count):
+        for peer_offset in range(peer_count):
             off = peer_size * peer_offset
             peer = peer_data[off:off + peer_size]
             addr, port = struct.unpack(peer_struct, peer)
@@ -233,7 +233,7 @@ class UDPTracker(object):
         info_count = len(payload) / info_size
         hashes = trans['sent_hashes']
         response = {}
-        for info_offset in xrange(info_count):
+        for info_offset in range(info_count):
             off = info_size * info_offset
             info = payload[off:off + info_size]
             seeders, completed, leechers = struct.unpack(info_struct, info)
