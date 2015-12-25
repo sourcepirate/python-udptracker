@@ -1,6 +1,6 @@
 import unittest
 
-from bencode import Bencoder
+from bencode import bdecode
 from udptrack import UDPTracker
 import udptrack
 import logging
@@ -17,7 +17,9 @@ def _generate_pear_id(client_id, client_version):
     random_string = ""
     while len(random_string) != 12:
         random_string = random_string + choice("1234567890")
-    return '-'+client_id+client_version+'-'+random_string
+    value = '-'+client_id+client_version+'-'+random_string
+    assert len(value) == 20
+    return value
 
 
 class TestUDPTracker(unittest.TestCase):
@@ -27,18 +29,12 @@ class TestUDPTracker(unittest.TestCase):
 
     def setUp(self):
         content = open('sample.torrent', 'rb').read()
-        self.content = Bencoder.decode(content)
+        self.content = bdecode(content)
         self.connection_id = None
         self.transaction_id = None
+        self.announc_url = self.content.get('announce')
         log.info(self.content)
 
     def test_connect(self):
-
-        tracker = UDPTracker(self.content, _generate_pear_id('KO', '0001'))
-        self.transaction_id = tracker._trans_id
-        buffer = StringIO.StringIO(tracker.info["pieces"])
-        log.info(buffer.read())
-        tracker.connect()
-        self.assertEqual(tracker._trans_id, self.transaction_id)
-        self.connection_id = tracker._connection_id
-        self.assertNotEqual(tracker._connection_id, udptrack.DEFAULT_CONNECTION_ID)
+        """test whether it is connecting or not"""
+        tracker = UDPTracker(self.announc_url, timeout=5)

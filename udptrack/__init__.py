@@ -1,17 +1,19 @@
 # author: plasmashadow
 
 import six
-from random import choice, sample
-from json import dumps, loads
+from random import choice, randint
 from .exeception import TrackerException, \
     TrackerRequestException, TrackerResponseException
-from bencode import Bencoder
 from six.moves.urllib.parse import urlparse
-from collections import defaultdict
-import hashlib, socket
+from collections import defaultdict, OrderedDict
+import hashlib
+import socket
+import time
 import struct
 
 DEFAULT_CONNECTION_ID = 0x41727101980
+
+__VESION__ = '0.0.5'
 
 EVENT_DICT = {
     "started": 2,
@@ -20,9 +22,10 @@ EVENT_DICT = {
     "stopped": 3
 }
 
-CONNECT_ACTION = 0
-ANNOUNCE_ACTION = 1
-SCRAP_ACTION = 2
+CONNECT = 0
+ANNOUNCE = 1
+SCRAP = 2
+ERROR = 3
 
 
 def generation_randomid(size, integer=False):
@@ -38,14 +41,30 @@ def generation_randomid(size, integer=False):
         return int(res)
 
 
+def _generate_peer_id():
+    """http://www.bittorrent.org/beps/bep_0020.html"""
+    peer_id = '-PU' + __VESION__.replace('.', '-') + '-'
+    remaining = 20 - len(peer_id)
+    numbers = [str(randint(0, 9)) for _ in xrange(remaining)]
+    peer_id += ''.join(numbers)
+    assert(len(peer_id) == 20)
+    return peer_id
+
 def _parseurl(url):
     """parses the udp trackert url"""
     parsed = urlparse(url)
     return parsed.hostname, parsed.port
 
-
+def trim_hash(info_hash):
+    """cleans up info hash"""
+    if len(info_hash) == 40:
+        return info_hash.decode("hex")
+    if len(info_hash) != 20:
+        raise TrackerRequestException("Infohash not equal to 20 digits", info_hash)
+    return info_hash
 
 class UDPTracker(object):
+
     """
       A Tracker for working with udp based
       tracking protocol
@@ -55,156 +74,171 @@ class UDPTracker(object):
       http://www.rasterbar.com/products/libtorrent/udp_tracker_protocol.html
     """
 
-    def __init__(self, metadata, peer_id, **kwargs):
+    __fields = [
+        "info_hash",
+        "peer_id",
+        "downloaded",
+        "left",
+        "uploaded",
+        "event",
+        "ip_address",
+        "key",
+        "num_want",
+        "port"
+    ]
 
-        self._connection_id = DEFAULT_CONNECTION_ID
-        self._trans_id = generation_randomid(5, integer=True)
-        parsed = metadata#loads(metadata)
-        self._tracker_url = parsed.get("announce", None)
-        if not self._tracker_url:
-            raise TrackerException("No announce URL present", parsed)
-        self.id = peer_id
-        self.info = parsed.get("info")
+    def __init__(self, announce_url, timeout=2, **kwargs):
+
+        self.host, self.port = _parseurl(announce_url)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._misc = kwargs
-        self._downloaded = 0
-        self._uploaded = 0
-        self.leechers = self.seeders = []
-        self.timeout = 0
+        self.peer_id = _generate_peer_id()
+        self._connection_id = DEFAULT_CONNECTION_ID
+        self._transaction = {}
+        self.timeout = timeout
+        self.info_hash = kwargs.get('info_hash')
 
-    @property
-    def info_hash(self):
-        """info hash holds the hashed value of info object"""
-        encoded = Bencoder.encode(self.info)
-        return hashlib.sha1(encoded).digest()
+    def build_header(self, action):
+        transaction_id = randint(0, 1 << 32 -1)
+        return transaction_id, struct.pack('!QLL', self._connection_id, action, transaction_id)
 
-    @property
-    def url(self):
-        url_d = urlparse(self._tracker_url)
-        return url_d.hostname, url_d.port
-
-    @property
-    def left(self):
-        return 0
-
-    def _gen_connect(self):
-        """generates the connect packet for udp tracker"""
-        return struct.pack(">qii", self._connection_id, CONNECT_ACTION, self._trans_id)
-
-    def _get_announce(self, event="none"):
-        """generates announce packet to the tracker"""
-
-        packet = struct.Struct(">qii20s20sqqqiiiih")
-        event = EVENT_DICT.get(event, EVENT_DICT["none"])
-
-        packet_data = packet.pack(self._connection_id, ANNOUNCE_ACTION, self._trans_id,
-                                  self.info_hash, self.id, self._downloaded, self.left, self._uploaded,
-                                  event, self._misc.get("ip", 0), generation_randomid(4, integer=True),
-                                  -1, self._misc.get("port", 6060))
-
-        return packet_data
-
-    def _get_scrape(self, info_hashes):
-        """generates the packets for scrape request"""
-
-        _struct = "qii"
-        _struct += "20s" * len(info_hashes)
-        _list = [self._connection_id, SCRAP_ACTION, self._trans_id]
-        _list.extend(info_hashes)
-        packet = struct.Struct(_struct)
-        return packet.pack(*_list)
-
-    def _sendto(self, address, message):
-        """sends the message to specific address"""
-        self.sock.sendto(message, address)
-        response = self.sock.recvfrom(1024)
-        return self._parse(response)
-
-    def _parse(self, response):
-        """parse the response based on action"""
-        data, address = response
-        response = defaultdict(lambda: None)
-        act = struct.unpack(">i", data[:4])
-        act = act[0]
-
-        if act == 3:
-            tid, message = struct.unpack(">i8s", data[4:])
-            raise TrackerRequestException(message=message, data="")
-
-        elif act == 0:
-            tid, cid = struct.unpack(">iq", data[4:])
-            response['transaction_id'] = tid
-            response['connection_id'] = cid
-            return act, response
-
-        elif act == 1 and len(data) >= 20:
-            transaction_id, interval, leechers, seeders = \
-                struct.unpack("!LLLL", data[4:20])
-            if transaction_id != self._trans_id:
-                raise TrackerException(message="invalid transaction id", data=transaction_id)
-            response['action'] = act
-            response['transaction_id'] = transaction_id
-            response['interval'] = interval
-            response['leechers'] = leechers
-            response['seeders'] = seeders
-            peers = []
-            more_data = data[20:]
-            while True:
-                try:
-                    ip_port = struct.Struct("!ih")
-                    size = ip_port.size
-                    ip, port = ip_port.unpack(more_data[:size])
-                    more_data = more_data[size:]
-                    ip = socket.inet_ntoa(struct.pack('!L', ip))
-                    peers.append((ip, port))
-                except:
-                    break
-            response['peers'] = peers
-            return act, response
-
-        elif act == 2:
-            action, transaction_id = struct.unpack("!LL", data)
-            if transaction_id == self._trans_id:
-                raise TrackerException(message="invalid transaction id", date=transaction_id)
-            response['action'] = act
-            response['transaction_id'] = transaction_id
-            response['completed'] = []
-            response['downloaded'] = []
-            response['incomplete'] = []
-            more_data = data[8:]
-            while True:
-                try:
-                    raw_data = struct.Struct("!iii")
-                    size = raw_data.size
-                    completed, downloaded, incomplete = raw_data.unpack(more_data[:size])
-                    more_data = more_data[size:]
-                    response['completed'].append(completed)
-                    response["downloaded"].append(downloaded)
-                    response["incomplete"].append(incomplete)
-                except:
-                    break
-            return act, response
-        else:
-            raise TrackerException(message="invalid response", data=data)
+    def send(self, action, payload=None):
+        if not payload:
+            payload = ''
+        trans_id, header = self.build_header(action)
+        self._transaction[trans_id] = trans = {
+            'action': action,
+            'time': time.time(),
+            'payload': payload,
+            'completed': False,
+        }
+        self.sock.sendto(header + payload, (self.host, self.port))
+        return trans
 
     def connect(self):
-        """send a connect request to tracker"""
-        act, response = self._sendto(self.url, self._gen_connect())
-        self._connection_id = response.get("connection_id", DEFAULT_CONNECTION_ID)
-        self._trans_id = response.get("transaction_id", self._trans_id)
+        return self.send(CONNECT)
 
-    def announce(self):
-        """sending an announce request to the trackers"""
-        act, response = self._sendto(self.url, self._get_announce())
-        self.leechers = response['leachers']
-        self.seeders = response['seeders']
-        self.timeout = response['interval']
-        self._connection_id = response.get("connection_id", DEFAULT_CONNECTION_ID)
-        self._trans_id = response.get("transaction_id", self._trans_id)
+    def announce(self, **kwargs):
 
-    def scrap(self, hashes):
-        """sending an scrape request"""
-        act, response = self._sendto(self.url, self._get_scrape(hashes))
-        self._connection_id = response.get("connection_id", DEFAULT_CONNECTION_ID)
-        self._trans_id = response.get("transaction_id", self._trans_id)
+        if not kwargs:
+            raise TrackerRequestException("Argument Missing for ", self.announce.__name__)
+
+        arguments = dict.fromkeys(self.__fields)
+        arguments['info_hash'] = trim_hash(self.info_hash)
+        arguments['port'] = 6800
+        arguments['numwant'] = 10
+        arguments.update(kwargs)
+
+        values = [arguments[a] for a in self.__fields]
+        payload = struct.pack('!20s20sQQQLLLLH', *values)
+        return self.send(ANNOUNCE, payload=payload)
+
+    def scrape(self, hashes):
+
+        if len(hashes) > 74:
+            raise TrackerRequestException('Max of 74 Request can be scraped', hashes)
+
+        payload = ''
+        for hash in hashes:
+            hash = trim_hash(hash)
+            payload += hash
+
+        trans = self.send(SCRAP, payload)
+        trans['sent_hashes'] = hashes
+        return trans
+
+    def interpret(self):
+
+        self.sock.settimeout(timeout=self.timeout)
+
+        try:
+            response = self.sock.recv(10240)
+        except socket.timeout:
+            return dict()
+
+        headers = response[:8]
+        payload = response[8:]
+
+        action, trans_id = struct.unpack('!LL', headers)
+
+        try:
+            trans = self._transaction[trans_id]
+        except KeyError:
+            raise TrackerResponseException("InvalidTransaction: id not found", trans_id)
+
+        trans['response'] = self._process(action, payload, trans)
+        trans['completed'] = True
+        del self._transaction[trans_id]
+        return trans
+
+    def _process(self, action, payload, trans):
+
+        if action == CONNECT:
+            return self._process_connect(payload, trans)
+        elif action == ANNOUNCE:
+            return self._process_announce(payload, trans)
+        elif action == SCRAP:
+            return self._process_scrape(payload, trans)
+        elif action == ERROR:
+            return self._process_error(payload, trans)
+
+        else:
+            raise TrackerResponseException("Invalid Action", action)
+
+    def _process_connect(self, payload, trans):
+
+        self._connection_id = struct.unpack('!Q', payload)[0]
+        return self._connection_id
+
+    def _process_error(self, payload, trans):
+
+        message = struct.unpack("!8s", payload)
+        raise TrackerResponseException("Error Response", message)
+
+    def _process_announce(self, payload, trans):
+
+        response = {}
+
+        info_struct = '!LLL'
+        info_size = struct.calcsize(info_struct)
+        info = payload[:info_size]
+        interval, leechers, seeders = struct.unpack(info_struct, info)
+
+        peer_data = payload[info_size:]
+        peer_struct = '!LH'
+        peer_size = struct.calcsize(peer_struct)
+        peer_count = len(peer_data) / peer_size
+        peers = []
+
+        for peer_offset in xrange(peer_count):
+            off = peer_size * peer_offset
+            peer = peer_data[off:off + peer_size]
+            addr, port = struct.unpack(peer_struct, peer)
+            peers.append({
+                'addr': socket.inet_ntoa(struct.pack('!L', addr)),
+                'port': port,
+            })
+
+        return dict(interval=interval,
+                    leechers=leechers,
+                    seeders=seeders,
+                    peers=peers)
+
+    def _process_scrape(self, payload, trans):
+
+        info_struct = '!LLL'
+        info_size = struct.calcsize(info_struct)
+        info_count = len(payload) / info_size
+        hashes = trans['sent_hashes']
+        response = {}
+        for info_offset in xrange(info_count):
+            off = info_size * info_offset
+            info = payload[off:off + info_size]
+            seeders, completed, leechers = struct.unpack(info_struct, info)
+            response[hashes[info_offset]] = {
+                'seeders': seeders,
+                'completed': completed,
+                'leechers': leechers,
+            }
+
+        return response
 
