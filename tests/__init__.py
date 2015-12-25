@@ -1,6 +1,6 @@
 import unittest
 
-from bencode import bdecode
+
 from udptrack import UDPTracker
 from udptrack import DEFAULT_CONNECTION_ID
 from udptrack.exeception import *
