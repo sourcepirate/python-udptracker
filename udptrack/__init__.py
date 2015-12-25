@@ -5,7 +5,7 @@ from random import choice, randint
 from .exeception import TrackerException, \
     TrackerRequestException, TrackerResponseException
 from six.moves.urllib.parse import urlparse
-from collections import defaultdict, OrderedDict
+from collections import defaultdict
 import hashlib
 import socket
 import time
