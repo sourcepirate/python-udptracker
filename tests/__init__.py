@@ -36,7 +36,7 @@ class TestUDPTracker(unittest.TestCase):
                                            {'path': ['RARBG.com.mp4'], 'length': 1016764},
                                            {'path': ['RARBG.com.txt'], 'length': 34},
                                            {'path': ['The.2015.1080p.WEB-DL.DD5.1.H264-RARBG.mkv'],
-                                            'length': 4973559977L},
+                                            'length': 4973559977},
                                            {'path': ['The.2015.1080p.WEB-DL.DD5.1.H264-RARBG.nfo'],
                                             'length': 4554}], 'piece length': 1048576,
             'name': 'The.2015.1080p.WEB-DL.DD5.1.H264-RARBG',
@@ -81,4 +81,3 @@ class TestUDPTracker(unittest.TestCase):
         mock_trim.assert_called_with('hash')
         args, kwargs = mock_send.call_args
         self.assertEqual(args, (udptrack.SCRAP,))
-        self.assertRaises(TrackerRequestException)
