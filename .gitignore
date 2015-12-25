@@ -1,2 +1,4 @@
 .idea
 *.pyc
+dist
+python_udptrack.egg-info

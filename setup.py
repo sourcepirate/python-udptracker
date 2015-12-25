@@ -7,7 +7,7 @@ def Readme():
 
 
 setup(
-    name='udptrack',
+    name='python-udptrack',
     packages=['udptrack'],
     version='0.0.5',
     description='',
